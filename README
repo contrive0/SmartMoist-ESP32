@@ -1,0 +1,19 @@
+/* ###########################################
+생성일:20261107
+생성자:이기락-제미나이
+주요내용 : 
+  -설정습도가 되면 ON/OFF 된다.
+  -설정습도는 기억 된다.
+##############################################*/
+
+[env:esp32-c3-devkitm-1]
+platform = espressif32
+board = esp32-c3-devkitm-1
+framework = arduino
+monitor_speed = 115200
+lib_deps = 
+    adafruit/Adafruit GFX Library
+    adafruit/Adafruit SSD1306
+    adafruit/Adafruit AHTX0
+    adafruit/Adafruit BMP280 Library
+    
