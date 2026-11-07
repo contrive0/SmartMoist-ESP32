@@ -46,32 +46,45 @@ bool selectLongPressHandled = false;     // 3초 장꾹 누름 중복 실행 방
 void handleButtons() {
   unsigned long currentTime = millis();
 
-  // 1. 선택(에디터) 버튼 3초 꾹 누르기 감지 로직
+  // 1. 선택(에디터) 버튼 3초 꾹 누르기 및 짧게 누르기 감지 로직
   int selectState = digitalRead(BTN_SELECT);
   if (selectState == LOW) { // 버튼을 누르고 있는 동안
     if (selectPressTime == 0) {
       selectPressTime = currentTime;     // 누르기 시작한 시간 기록
       selectLongPressHandled = false;
     } else if (!selectLongPressHandled && (currentTime - selectPressTime >= 3000)) {
-      // 3초(3000ms) 이상 꾹 누르고 있을 때 동작 실행
-      editMode = (editMode + 1) % 3;     // 0 -> 1 -> 2 -> 0 순환
-      selectLongPressHandled = true;     // 중복 실행 방지
-
-      // 설정 모드가 끝나고 다시 기본 화면(0)으로 돌아갈 때 메모리에 저장
+      // 3초(3000ms) 이상 꾹 누를 때: Running(0) <-> Setting 진입/탈출 토글
       if (editMode == 0) {
-        preferences.begin("humidifier", false); // "humidifier" 네임스페이스로 쓰기 모드 오픈
+        editMode = 1; // 기본 화면 -> OFF 설정 모드로 진입
+      } else {
+        // 설정 모드에서 다시 3초 꾹 누르면 Running 모드로 탈출하면서 메모리 저장
+        editMode = 0; 
+        preferences.begin("humidifier", false); 
         preferences.putFloat("onHumi", onHumidity);
         preferences.putFloat("offHumi", offHumidity);
         preferences.end();
         Serial.println("설정값이 플래시 메모리에 안전하게 저장되었습니다!");
       }
+      selectLongPressHandled = true;     // 3초 동작 중복 실행 방지
     }
-  } else { // 버튼에서 손을 뗄 때 초기화
+  } else { // 버튼에서 손을 뗄 때
+    // 3초를 채우지 않고 '짧게' 탁 눌렀다 뗀 경우 (에디터 진입 상태일 때만 1 <-> 2 전환)
+    if (selectPressTime > 0 && !selectLongPressHandled && (currentTime - selectPressTime < 3000)) {
+      if (editMode > 0) {
+        editMode++;
+        if (editMode > 2) {
+          editMode = 1; // OFF 설정(1)과 ON 설정(2)을 순환
+        }
+      }
+    }
     selectPressTime = 0;
     selectLongPressHandled = false;
   }
 
-  // 2. 일반 버튼 디바운스 체크 (UP, DOWN 버튼용)
+  // 2. 에디터 모드가 아닐 경우 UP/DOWN 버튼은 반응하지 않음
+  if (editMode == 0) return;
+
+  // 3. 일반 버튼 디바운스 체크 (UP, DOWN 버튼 공용)
   if (currentTime - lastButtonPress < debounceDelay) return;
 
   // 위 버튼 (UP) - 값 증가
@@ -84,6 +97,7 @@ void handleButtons() {
       onHumidity += 1.0;
       if (onHumidity >= offHumidity) onHumidity = offHumidity - 1.0; // OFF보다 클 수 없음
     }
+    return;
   }
 
   // 아래 버튼 (DOWN) - 값 감소
@@ -96,6 +110,7 @@ void handleButtons() {
       onHumidity -= 1.0;
       if (onHumidity < 0.0) onHumidity = 0.0;
     }
+    return;
   }
 }//handleButtons
 
@@ -168,7 +183,7 @@ void loop() {
   // 1. 상단 타이틀 (크기 1)
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
-  display.setCursor(3, 0);//왼쪽에서 2띄우기.
+  display.setCursor(3, 0); // 왼쪽에서 3띄우기
   if (editMode == 0) {
     display.print("# Smart Humidifier #"); 
   } else if (editMode == 1) {
@@ -180,7 +195,7 @@ void loop() {
   // 2. 현재 온/습도 (크기 2 - 한 줄에 크게 표시하며 가운데 정렬)
   display.setTextSize(2);
   display.setTextColor(SSD1306_WHITE);
-  display.setCursor(21, 16); //가운데로  X,Y
+  display.setCursor(21, 16); // 가운데로 X,Y
   
   display.print((int)currentTemp);
   display.print("C ");
@@ -224,7 +239,7 @@ void loop() {
   display.setCursor(0, 54);
   display.print("Relay: ");
   display.print(humidifierState ? "[ON]" : "[OFF]");
-  display.print(editMode == 0 ? " (Running)" : " (Editing)");
+  display.print(editMode == 0 ? " (Runn)" : " (Edit)");
 
   display.display(); // 화면 최종 갱신
 
@@ -235,5 +250,5 @@ void loop() {
   Serial.print("% | OFF설정:"); Serial.print(offHumidity, 0);
   Serial.println(humidifierState ? "% | 릴레이:ON" : "% | 릴레이:OFF");
 
-  delay(100); // 디바운스 및 루프 주기 조정
+  delay(1000); // 디바운스 및 루프 주기 조정(전력 소모를 줄임)
 }//loop
